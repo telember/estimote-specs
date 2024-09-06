@@ -4,6 +4,7 @@
 
 // Once you obtain the Manufacturer Specific Data, here's how to parse them into
 // an Estimote Nearable packet.
+var ESTIMOTE_SERVICE_UUID = 'fe9a';
 function parseEstimoteNearablePacket(data) { // data is a 0-indexed byte array/buffer
 
   // note that depending on the BLE-scanning library you use, the Company ID
@@ -12,19 +13,22 @@ function parseEstimoteNearablePacket(data) { // data is a 0-indexed byte array/b
   //
   // most of the time, it's simply the first two bytes of the data, and that's
   // what we're assuming here
-  var companyId = data.readUInt16LE(0);
+ 
+  // var companyId = data.readUInt16LE(0);
   // Company ID must be Estimote's
-  if (companyId != 0x015d) { return; }
+  // if (companyId != 76) { return; }
 
   // byte 2 is "which exactly Estimote packet this is"
   // for a Nearable packet version 1 (currently the only one), the value is 0x01
-  var frameType = data.readUInt8(2);
-  if (frameType != 0x01) { return; }
 
+  var frameType = data.readUInt8(0) & 0b00001111;
+  if (frameType != 0x01) { return; }
+  console.log("frameType", frameType)
+  console.log("data", data.length)
   // Nearable identifier, this matches the identifier you see in Estimote Cloud
   // bytes 3–10 (8 bytes total)
-  var nearableId = data.toString('hex', 3, 11);
-
+  var nearableId = data.toString('hex', 1, 17);
+  console.log("id", nearableId)
   // byte 11 = hardware version
   // byte 12 = firmware version
 
@@ -102,8 +106,8 @@ function parseEstimoteNearablePacket(data) { // data is a 0-indexed byte array/b
     return {number: number, unit: unit};
   }
   var motionStateDuration = {
-    current: parseMotionStateDuration(data.readUInt8(19)),
-    previous: parseMotionStateDuration(data.readUInt8(20))
+    current: 0,//parseMotionStateDuration(data.readUInt8(19)),
+    previous: 0,//parseMotionStateDuration(data.readUInt8(20))
   };
 
   return {
@@ -115,14 +119,33 @@ function parseEstimoteNearablePacket(data) { // data is a 0-indexed byte array/b
 }
 
 // example how to scan & parse Estimote Nearable packets with noble
+function appendObjectToJsonFile(object, filename) {
+  // Read the existing content of the file (if it exists)
+  let fileContent = [];
+  if (fs.existsSync(filename)) {
+    const existingData = fs.readFileSync(filename, 'utf-8');
+    if (existingData.trim()) {
+      fileContent = JSON.parse(existingData);
+    }
+  }
+
+  // Add the new object to the content array
+  fileContent.push(object);
+
+  // Write the updated content back to the file
+  fs.writeFileSync(filename, JSON.stringify(fileContent, null, 2));
+  console.log(`Object appended to ${filename}`);
+}
+
 
 var noble = process.platform === 'darwin' ? require('noble-mac') : require('noble');
 
 noble.on('stateChange', function(state) {
   console.log('state has changed', state);
   if (state == 'poweredOn') {
+    var serviceUUIDs = [ESTIMOTE_SERVICE_UUID]; // Estimote Service
     var allowDuplicates = true;
-    noble.startScanning([], allowDuplicates, function(error) {
+    noble.startScanning(serviceUUIDs, allowDuplicates, function(error) {
       if (error) {
         console.log('error starting scanning', error);
       } else {
@@ -132,9 +155,13 @@ noble.on('stateChange', function(state) {
   }
 });
 
+
 noble.on('discover', function(peripheral) {
-  var data = peripheral.advertisement.manufacturerData;
-  if (!data) { return; }
+  var serviceData = peripheral.advertisement.serviceData.find(function(el) {
+    return el.uuid == ESTIMOTE_SERVICE_UUID;
+  });
+  if (serviceData === undefined) { return; }
+  var data = serviceData.data;
 
   var nearablePacket = parseEstimoteNearablePacket(data);
   if (nearablePacket) { console.log(nearablePacket); }

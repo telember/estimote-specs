@@ -9,6 +9,12 @@ function parseEstimoteTelemetryPacket(data) { // data is a 0-indexed byte array/
 
   // byte 0, lower 4 bits => frame type, for Telemetry it's always 2 (i.e., 0b0010)
   var frameType = data.readUInt8(0) & 0b00001111;
+  console.log("data", data)
+  console.log("data type", data.readUInt8(0))
+  console.log("frameType", frameType)
+  console.log("data", data.length)
+  var id = data.toString('hex', 1, data.length);
+  console.log("id", id)
   var ESTIMOTE_FRAME_TYPE_TELEMETRY = 2;
   if (frameType != ESTIMOTE_FRAME_TYPE_TELEMETRY) { return; }
 
@@ -272,5 +278,6 @@ noble.on('discover', function(peripheral) {
   var data = serviceData.data;
 
   var telemetryPacket = parseEstimoteTelemetryPacket(data);
+
   if (telemetryPacket) { console.log(telemetryPacket); }
 });
